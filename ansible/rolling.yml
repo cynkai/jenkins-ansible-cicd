@@ -68,6 +68,15 @@
         groups: repair_first
       loop: "{{ unhealthy }}"
 
+    - name: Audit DEPLOY_START
+      ansible.builtin.include_tasks: tasks/audit.yml
+      vars:
+        audit_event: DEPLOY_START
+        audit_extra:
+          drain: "{{ rolling_drain | default(true) | bool }}"
+          already_down: "{{ already_down }}"
+          unhealthy: "{{ unhealthy }}"
+
 # ---------------------------------------------------------------------------
 # [1~3] 한 대씩 교체
 #   태스크 이름에 {{ inventory_hostname }}을 넣지 않는다. serial로 나뉜 배치에서도 이름은 첫 서버 기준으로
@@ -140,6 +149,12 @@
       become: false
       when: needs_update and (rolling_drain | bool)
 
+    - name: Audit SERVER_DRAINED
+      ansible.builtin.include_tasks: tasks/audit.yml
+      vars:
+        audit_event: SERVER_DRAINED
+      when: needs_update and (rolling_drain | bool)
+
   # --- 교체 + 서버 직접 헬스체크 (1주차 Role 그대로) ---------------------------
   # 이미지 로드 → 컨테이너 교체 → 127.0.0.1:20006 /health 200 → /version == 새 버전
   roles:
@@ -185,6 +200,15 @@
       become: false
       when: needs_update
 
+    - name: Audit SERVER_UPDATED
+      ansible.builtin.include_tasks: tasks/audit.yml
+      vars:
+        audit_event: SERVER_UPDATED
+        audit_extra:
+          from: "{{ current_image }}"
+          drain: "{{ rolling_drain | bool }}"
+      when: needs_update
+
 # ---------------------------------------------------------------------------
 # [4] 전부 성공했을 때만 도달한다 → 3주차 롤백용 "마지막 정상 태그" 기록
 #     이전 값은 prev_good_tag로 밀어 둔다. 이미지는 서버에서 지우지 않는다.
@@ -207,3 +231,9 @@
         executable: /bin/bash
       register: tag_rec
       changed_when: "'UPDATED' in tag_rec.stdout"
+
+    - name: Audit DEPLOY_DONE
+      ansible.builtin.include_tasks: tasks/audit.yml
+      vars:
+        audit_event: DEPLOY_DONE
+      run_once: true
