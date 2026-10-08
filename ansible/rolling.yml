@@ -106,7 +106,7 @@
           | update={{ needs_update }} drain={{ rolling_drain | bool }} pinned={{ pinned }}
 
     # --- drain ---------------------------------------------------------------
-    - name: Drain this server from nginx
+    - name: Drain {{ inventory_hostname }} from nginx
       ansible.builtin.import_role:
         name: nginx
         tasks_from: render
@@ -147,7 +147,7 @@
 
   post_tasks:
     # --- undrain -------------------------------------------------------------
-    - name: Undrain this server
+    - name: Undrain {{ inventory_hostname }}
       ansible.builtin.import_role:
         name: nginx
         tasks_from: render
