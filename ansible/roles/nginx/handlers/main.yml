@@ -2,7 +2,7 @@
 # 1주차 적용 스크립트를 handler로 옮겼다. 락 안에서: 백업 → 교체 → nginx -t → reload. 실패 시 원복.
 #
 # delegate_to를 handler에 직접 적는다. notify한 태스크가 LB로 delegate돼 있어도
-# handler는 notify한 호스트(app1)에서 실행된다 (2주차 빌드에서 확인: fatal [app1], nginx: command not found).
+# handler는 notify한 호스트(app1 등)에서 실행된다 (로컬 검증).
 
 - name: apply nginx conf
   ansible.builtin.shell: |
@@ -25,7 +25,9 @@
       echo "NGINX_TEST_FAILED (my change reverted)"; exit 1
     fi
 
-    systemctl reload nginx && echo "NGINX_RELOADED down_servers=$(grep -c ' down ' "$CUR")"
+    # 실제로 적용된 파일에서 down인 서버 이름을 읽어 출력한다 (태스크 이름이 아니라 결과로 확인)
+    DOWN="$(grep ' down ' "$CUR" | sed 's/.*# *//' | paste -sd, -)"
+    systemctl reload nginx && echo "NGINX_RELOADED down=[${DOWN}]"
   args:
     executable: /bin/bash
   register: nginx_apply

@@ -70,6 +70,8 @@
 
 # ---------------------------------------------------------------------------
 # [1~3] 한 대씩 교체
+#   태스크 이름에 {{ inventory_hostname }}을 넣지 않는다. serial로 나뉜 배치에서도 이름은 첫 서버 기준으로
+#   한 번만 해석돼서 app2 차례에 "app1"로 찍힌다 (2주차 빌드 로그에서 확인). 서버는 로그의 [app2]로 본다.
 - name: Rolling deploy (one server at a time)
   hosts: "repair_first:app"     # 고장 서버가 있으면 그 서버부터, 나머지는 인벤토리 순서
   become: true
@@ -106,7 +108,7 @@
           | update={{ needs_update }} drain={{ rolling_drain | bool }} pinned={{ pinned }}
 
     # --- drain ---------------------------------------------------------------
-    - name: Drain {{ inventory_hostname }} from nginx
+    - name: Drain this server from nginx
       ansible.builtin.import_role:
         name: nginx
         tasks_from: render
@@ -118,13 +120,13 @@
     - name: Apply drain now
       ansible.builtin.meta: flush_handlers
 
-    - name: Wait for in-flight requests ({{ drain_wait }}s)
+    - name: Wait for in-flight requests
       ansible.builtin.pause:
         seconds: "{{ drain_wait }}"
       when: needs_update and (rolling_drain | bool)
 
     # drain이 실제로 먹혔는지: Nginx 경유 요청에 이 서버가 한 번도 안 나와야 한다.
-    - name: Confirm {{ inventory_hostname }} gets no traffic
+    - name: Confirm drained server gets no traffic
       ansible.builtin.uri:
         url: "http://127.0.0.1:{{ lb_port }}/version"
         return_content: true
@@ -147,7 +149,7 @@
 
   post_tasks:
     # --- undrain -------------------------------------------------------------
-    - name: Undrain {{ inventory_hostname }}
+    - name: Undrain this server
       ansible.builtin.import_role:
         name: nginx
         tasks_from: render
@@ -159,7 +161,7 @@
     - name: Apply undrain now
       ansible.builtin.meta: flush_handlers
 
-    - name: "{{ inventory_hostname }} repaired → unpin"
+    - name: Repaired server → unpin
       ansible.builtin.set_fact:
         pinned_down: "{{ pinned | difference([inventory_hostname]) }}"
       delegate_to: "{{ lb_host }}"
@@ -167,7 +169,7 @@
       when: is_pinned | bool
 
     # Nginx를 거쳐 이 서버가 새 버전으로 다시 응답하는지 (라운드로빈이라 몇 번 걸릴 수 있다)
-    - name: "{{ inventory_hostname }} answers through nginx with {{ app_version }}"
+    - name: Server answers through nginx with new version
       ansible.builtin.uri:
         url: "http://127.0.0.1:{{ lb_port }}/version"
         return_content: true
