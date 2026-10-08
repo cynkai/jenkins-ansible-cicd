@@ -1,4 +1,9 @@
-// minjun - Week 1: Build / Test / Deploy / Verify
+// minjun - Week 2: Build / Test / Package / Rolling Deploy / Verify
+//
+// 2주차 변경
+//  - Deploy → Rolling Deploy (ansible/rolling.yml, 서버 한 대씩 drain → 교체 → 복귀)
+//  - STRATEGY 파라미터: drain(방식 A, 기본) / no-drain(방식 C, 비교 실험용)
+//    choice만 쓴다. 3주차에 다른 사람이 실행하므로 자유 입력(string)은 명령 주입 경로가 된다.
 //
 // 공용 인프라 전제:
 //  - Agent 라벨: ansible-control (스터디장 connection-test에서 검증된 라벨)
@@ -10,6 +15,11 @@
 
 pipeline {
   agent { label 'ansible-control' }
+
+  parameters {
+    choice(name: 'STRATEGY', choices: ['drain', 'no-drain'],
+           description: 'drain: 한 대씩 Nginx에서 빼고 교체 (A) / no-drain: 빼지 않고 교체, Nginx 재시도에 맡김 (C, 비교 실험)')
+  }
 
   options {
     disableConcurrentBuilds()                      // 내 배포끼리 겹치지 않게
@@ -32,7 +42,9 @@ pipeline {
           env.GIT_SHA     = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
           env.APP_VERSION = readFile('app/VERSION').trim()
           env.IMAGE_TAG   = "${env.APP_VERSION}-${env.GIT_SHA}"
-          currentBuild.displayName = "#${env.BUILD_NUMBER} ${env.IMAGE_TAG}"
+          // 파라미터를 추가한 첫 빌드는 params가 비어 있을 수 있어 기본값을 둔다
+          env.STRATEGY    = params.STRATEGY ?: 'drain'
+          currentBuild.displayName = "#${env.BUILD_NUMBER} ${env.IMAGE_TAG} ${env.STRATEGY}"
         }
         sh 'echo "version=$APP_VERSION sha=$GIT_SHA tag=$IMAGE_TAG"'
       }
@@ -67,18 +79,27 @@ pipeline {
       }
     }
 
-    stage('Deploy') {
+    stage('Rolling Deploy') {
       steps {
         withCredentials([sshUserPrivateKey(credentialsId: env.SSH_CRED,
                                            keyFileVariable: 'SSH_KEY',
                                            usernameVariable: 'SSH_USER')]) {
           dir('ansible') {
-            sh '''
-              ansible-playbook -i inventory.ini site.yml \
+            // bash로 실행해야 pipefail이 된다 (tee 뒤에서 ansible 실패가 묻히지 않게)
+            sh '''#!/bin/bash
+              set -euo pipefail
+              if [ "$STRATEGY" = "no-drain" ]; then DRAIN=false; else DRAIN=true; fi
+              echo "strategy=$STRATEGY rolling_drain=$DRAIN"
+
+              ansible-playbook -i inventory.ini rolling.yml \
                 -u "$SSH_USER" --private-key "$SSH_KEY" \
                 -e app_version="$APP_VERSION" \
                 -e git_sha="$GIT_SHA" \
-                -e image_archive="$WORKSPACE/$ARCHIVE"
+                -e image_archive="$WORKSPACE/$ARCHIVE" \
+                -e rolling_drain="$DRAIN" \
+                | tee "$WORKSPACE/build/rolling.log"
+
+              echo "nginx reloads: $(grep -c '"msg": "NGINX_RELOADED' "$WORKSPACE/build/rolling.log" || true)"
             '''
           }
         }
@@ -104,6 +125,8 @@ pipeline {
 
   post {
     always {
+      // 배포 로그는 발표·비교용으로 남긴다 (handler 실행 = reload 기록 포함)
+      archiveArtifacts artifacts: 'build/rolling.log', allowEmptyArchive: true
       // 공용 Agent 디스크를 채우지 않도록 정리
       sh '''
         rm -f "$ARCHIVE" || true
