@@ -1,0 +1,35 @@
+---
+# 1주차 적용 스크립트를 handler로 옮겼다. 락 안에서: 백업 → 교체 → nginx -t → reload. 실패 시 원복.
+
+- name: apply nginx conf
+  ansible.builtin.shell: |
+    set -u
+    NEW="{{ nginx_stage }}"
+    CUR="{{ nginx_conf }}"
+    BAK="{{ nginx_stage | dirname }}/{{ owner }}.conf.bak"
+    exec 9>"{{ nginx_lock }}"
+    flock -w 60 9 || { echo "LOCK_TIMEOUT"; exit 1; }
+
+    if [ -f "$CUR" ] && cmp -s "$NEW" "$CUR"; then
+      echo "UNCHANGED"; exit 0
+    fi
+
+    if [ -f "$CUR" ]; then cp -p "$CUR" "$BAK"; else rm -f "$BAK"; fi
+    cp "$NEW" "$CUR"
+
+    if ! nginx -t 2>&1; then
+      if [ -f "$BAK" ]; then cp -p "$BAK" "$CUR"; else rm -f "$CUR"; fi
+      echo "NGINX_TEST_FAILED (my change reverted)"; exit 1
+    fi
+
+    systemctl reload nginx && echo "NGINX_RELOADED down_servers=$(grep -c ' down ' "$CUR")"
+  args:
+    executable: /bin/bash
+  register: nginx_apply
+  changed_when: "'NGINX_RELOADED' in nginx_apply.stdout"
+  listen: apply nginx conf
+
+- name: show nginx apply result
+  ansible.builtin.debug:
+    msg: "{{ nginx_apply.stdout_lines | last }}"
+  listen: apply nginx conf

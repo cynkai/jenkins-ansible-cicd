@@ -1,0 +1,27 @@
+---
+# conf를 staging에 렌더링하고, 실제 conf와 다를 때만 handler를 부른다.
+
+- name: Ensure staging dir
+  ansible.builtin.file:
+    path: "{{ nginx_stage | dirname }}"
+    state: directory
+    mode: "0755"
+  delegate_to: "{{ nginx_lb_host }}"
+
+- name: Render conf to staging (drained={{ drained_hosts }})
+  ansible.builtin.template:
+    src: minjun.conf.j2
+    dest: "{{ nginx_stage }}"
+    mode: "0644"
+  delegate_to: "{{ nginx_lb_host }}"
+
+# staging 파일이 바뀌었나가 아니라 "실제 conf"와 다른가로 판단한다.
+# cmp: 0=같음, 1=다름, 2=파일 없음 → 0이 아니면 적용 대상
+- name: Compare staging with live conf
+  ansible.builtin.command:
+    argv: [cmp, -s, "{{ nginx_stage }}", "{{ nginx_conf }}"]
+  register: nginx_cmp
+  changed_when: nginx_cmp.rc != 0
+  failed_when: false
+  delegate_to: "{{ nginx_lb_host }}"
+  notify: apply nginx conf
