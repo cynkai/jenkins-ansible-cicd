@@ -1,5 +1,8 @@
 ---
 # 1주차 적용 스크립트를 handler로 옮겼다. 락 안에서: 백업 → 교체 → nginx -t → reload. 실패 시 원복.
+#
+# delegate_to를 handler에 직접 적는다. notify한 태스크가 LB로 delegate돼 있어도
+# handler는 notify한 호스트(app1)에서 실행된다 (2주차 빌드에서 확인: fatal [app1], nginx: command not found).
 
 - name: apply nginx conf
   ansible.builtin.shell: |
@@ -27,6 +30,7 @@
     executable: /bin/bash
   register: nginx_apply
   changed_when: "'NGINX_RELOADED' in nginx_apply.stdout"
+  delegate_to: "{{ nginx_lb_host }}"
   listen: apply nginx conf
 
 - name: show nginx apply result
