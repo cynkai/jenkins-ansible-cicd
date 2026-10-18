@@ -38,14 +38,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/health":
             self._send(200, {"status": "ok"})
-        elif self.path == "/version":
+        elif self.path in ("/version", "/"):
             self._send(200, version_info())
-        elif self.path == "/":
-            # v8 시연용 결함: 실제 서비스 경로("/")만 고장 난다.
-            # /health와 /version은 정상이라 배포 파이프라인의 헬스체크·검증은 전부 통과한다.
-            # → "배포는 성공했는데 12시간 뒤에 장애가 발견되는" 상황을 재현한다.
-            print("ERROR order service crashed: NullReference in checkout()", flush=True)
-            self._send(500, {"error": "order service crashed", "version": os.getenv("APP_VERSION", "dev")})
         else:
             self._send(404, {"error": "not found"})
 
