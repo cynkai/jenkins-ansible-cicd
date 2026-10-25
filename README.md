@@ -1,5 +1,8 @@
 # jenkins-ansible-cicd (minjun)
 
+> **📦 보관됨 (2026-10)** — 클클 10기 Jenkins & Ansible 스터디(시즌 1)가 끝나 더 이상 관리하지 않는 읽기 전용 레포입니다.
+> 스터디 공용 서버 주소는 `APP1_IP`~`APP3_IP`, `LB_IP` 플레이스홀더로 바꿨습니다(측정 CSV 포함). 서버는 반납되어 그대로는 실행되지 않습니다.
+
 클클 10기 Jenkins & Ansible 스터디 실습 레포.
 
 | 주차 | 내용 |
