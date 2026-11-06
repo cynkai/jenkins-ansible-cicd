@@ -1,0 +1,18 @@
+pipeline {
+    agent any
+    stages {
+        stage('Info') {
+            steps {
+                echo "브랜치: ${env.BRANCH_NAME}"
+                echo "잡 이름: ${env.JOB_NAME}"
+            }
+        }
+        stage('Test') {
+            steps { sh 'echo "테스트는 모든 브랜치에서 실행"' }
+        }
+        stage('Deploy') {
+            when { branch 'main' }
+            steps { sh 'echo "배포는 main에서만"' }
+        }
+    }
+}
