@@ -12,6 +12,8 @@
 | 2주차 | Rolling 배포 (drain/undrain + handler) · 무중단 측정 · 보안 변형(이미지 무결성 게이트, 감사 로그) |
 | **3주차** | **Rolling 롤백** · 서명된 배포 기록(ledger) · 승인 게이트 · 증거 보존 · 격리 |
 
+3주차 개념 실습(Shared Library · Multibranch)은 [`labs/`](labs/)에 있습니다.
+
 ## 할당 자원
 
 | 항목 | 값 |
